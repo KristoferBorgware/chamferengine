@@ -94,6 +94,8 @@ export class BlockTextures {
 		levels: readonly Uint8Array<ArrayBuffer>[],
 		/** Layers to fit into, for a test that wants the packed path. */
 		limit?: number,
+		/** Pictures to store, or nothing for all of them. */
+		resident?: ReadonlySet<number>,
 	) {
 		this.atlas = atlas;
 		this.table = Int32Array.from(atlas.table);
@@ -101,11 +103,27 @@ export class BlockTextures {
 		// **Asked of the device, not assumed.** 256 array layers are
 		// guaranteed everywhere and 2,048 is common, so most machines give
 		// every picture a layer of its own and this is the identity.
+		// **The coarsest level a bake writes is one texel a picture, which IS
+		// that picture's average.** So the colour a missing picture falls back
+		// to costs nothing to work out and nothing to carry.
+		const flattest = levels[atlas.levels - 1];
+		const averageOf = (picture: number): [number, number, number] => {
+			const at = picture * 4;
+			return flattest
+				? [
+						(flattest[at] ?? 255) / 255,
+						(flattest[at + 1] ?? 255) / 255,
+						(flattest[at + 2] ?? 255) / 255,
+					]
+				: [1, 1, 1];
+		};
 		const packing = packPictures(
 			atlas.layers.length,
 			atlas.size,
 			atlas.levels,
 			Math.max(1, limit ?? device.limits.maxTextureArrayLayers),
+			resident,
+			averageOf,
 		);
 		this.packing = packing;
 		this.texture = device.createTexture({
@@ -124,10 +142,10 @@ export class BlockTextures {
 			// Unpacked this is the bytes as they came; packed it is the same
 			// tiles laid into shared layers, level by level, so a tile's mips
 			// stay its own rather than being averaged with its neighbours'.
-			const laid =
-				packing.perSide === 1
-					? bytes
-					: intoLayers(bytes, wide, packing, atlas.layers.length);
+			const whole =
+				packing.perSide === 1 &&
+				packing.order.length === atlas.layers.length;
+			const laid = whole ? bytes : intoLayers(bytes, wide, packing);
 			device.queue.writeTexture(
 				{ texture: this.texture, mipLevel: level },
 				laid,
@@ -236,26 +254,25 @@ function intoLayers(
 	tiles: Uint8Array<ArrayBuffer>,
 	wide: number,
 	packing: Packing,
-	count: number,
 ): Uint8Array<ArrayBuffer> {
 	const side = packing.perSide * wide;
 	const out = new Uint8Array<ArrayBuffer>(
 		new ArrayBuffer(packing.layers * side * side * 4),
 	);
 	const each = packing.perSide * packing.perSide;
-	for (let at = 0; at < count; at++) {
-		const layer = Math.floor(at / each);
-		const within = at % each;
+	packing.order.forEach((picture, slot) => {
+		const layer = Math.floor(slot / each);
+		const within = slot % each;
 		const x = (within % packing.perSide) * wide * 4;
 		const y = Math.floor(within / packing.perSide) * wide;
 		for (let row = 0; row < wide; row++) {
-			const from = (at * wide + row) * wide * 4;
+			const from = (picture * wide + row) * wide * 4;
 			out.set(
 				tiles.subarray(from, from + wide * 4),
 				(layer * side + y + row) * side * 4 + x,
 			);
 		}
-	}
+	});
 	return out;
 }
 

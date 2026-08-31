@@ -72,8 +72,12 @@ fn cutoutFragment(in : CutoutOut) {
 	// per-vertex layer is not uniform across the draw, and a sample picks its
 	// own mip from how the coordinate changes between neighbouring pixels.
 	let place = placeOf(in.layer);
-	let there = samplePicture(
-		blockMap, blockSample, in.uv, place, dpdx(in.uv), dpdy(in.uv)).a;
+	// A picture that is not stored shadows as a solid block: a flat colour has
+	// no holes, so guessing it has any would light a canopy through gaps that
+	// are not there.
+	let sampled = samplePicture(
+		blockMap, blockSample, in.uv, place, dpdx(in.uv), dpdy(in.uv));
+	let there = select(1.0, sampled.a, isStored(place));
 	if (in.layer >= 0 && there < ALPHA_CUT) {
 		discard;
 	}

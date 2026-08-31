@@ -350,9 +350,12 @@ fn pictureOn(uv : vec2f, layer : i32, band : i32) -> vec4f {
 	// the one thing about the band a packing has to solve.
 	let overPlace = placeOf(band);
 	let over = sampleBand(blockMap, bandSample, uv, overPlace, ddx, ddy);
-	let cover = select(0.0, over.a, band >= 0);
-	let color = mix(picked.rgb, over.rgb, cover);
-	return select(vec4f(1.0), vec4f(color, picked.a), layer >= 0);
+	// A picture that is not stored takes its own average colour, and its band
+	// takes none: a flat colour has no brink drawn over it.
+	let body = select(unstoredColor(place), picked, isStored(place));
+	let cover = select(0.0, over.a, band >= 0 && isStored(overPlace));
+	let color = mix(body.rgb, over.rgb, cover);
+	return select(vec4f(1.0), vec4f(color, body.a), layer >= 0);
 }
 
 /**

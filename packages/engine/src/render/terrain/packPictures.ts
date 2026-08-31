@@ -36,6 +36,16 @@ export interface Packing {
 	readonly places: Float32Array<ArrayBuffer>;
 
 	/**
+	 * Which picture is stored in each slot, in slot order.
+	 *
+	 * Slot `n` is layer `n / (perSide * perSide)` at the offset inside it.
+	 * A set with everything resident is the identity again; a set with only
+	 * some of it resident stores those and no more, which is the whole point
+	 * of asking.
+	 */
+	readonly order: readonly number[];
+
+	/**
 	 * The coarsest mip level worth keeping, counted from the finest.
 	 *
 	 * A packed layer's levels stay correct while a tile is big enough that
@@ -61,25 +71,52 @@ export function packPictures(
 	tile: number,
 	levels: number,
 	limit: number,
+	/** Pictures to store, or nothing for all of them. */
+	resident?: ReadonlySet<number>,
+	/**
+	 * A picture's own average colour, for the ones not stored.
+	 *
+	 * **Something on the screen beats the right thing later.** A block whose
+	 * picture is not here draws as a flat colour rather than as nothing or as
+	 * somebody else's texture, and the colour is the picture's own average --
+	 * which the bake already computed, because the coarsest mip level of a
+	 * picture IS its average.
+	 */
+	colorOf?: (picture: number) => readonly [number, number, number],
 ): Packing {
 	const pictures = Math.max(1, count);
+	const order: number[] = [];
+	for (let at = 0; at < pictures; at++)
+		if (!resident || resident.has(at)) order.push(at);
+	const stored = Math.max(1, order.length);
 	// A picture to a layer whenever the device allows it, which is the
 	// arrangement with nothing wrong with it.
 	let perSide = 1;
-	while (Math.ceil(pictures / (perSide * perSide)) > limit) perSide++;
-	const layers = Math.ceil(pictures / (perSide * perSide));
+	while (Math.ceil(stored / (perSide * perSide)) > limit) perSide++;
+	const layers = Math.ceil(stored / (perSide * perSide));
 	const side = tile * perSide;
 	const places = new Float32Array<ArrayBuffer>(
 		new ArrayBuffer(pictures * 4 * 4),
 	);
 	const each = perSide * perSide;
+	// **A layer of `-1` is what the shader already reads as "no picture"**, so
+	// a picture that is not stored says exactly that and carries its own
+	// average colour in the other three. Nothing new had to be invented for
+	// the fallback; the no-bake path was already there.
 	for (let at = 0; at < pictures; at++) {
-		const within = at % each;
-		places[at * 4] = Math.floor(at / each);
-		places[at * 4 + 1] = (within % perSide) / perSide;
-		places[at * 4 + 2] = Math.floor(within / perSide) / perSide;
-		places[at * 4 + 3] = 1 / perSide;
+		const colour = colorOf?.(at) ?? [1, 1, 1];
+		places[at * 4] = -1;
+		places[at * 4 + 1] = colour[0];
+		places[at * 4 + 2] = colour[1];
+		places[at * 4 + 3] = colour[2];
 	}
+	order.forEach((picture, slot) => {
+		const within = slot % each;
+		places[picture * 4] = Math.floor(slot / each);
+		places[picture * 4 + 1] = (within % perSide) / perSide;
+		places[picture * 4 + 2] = Math.floor(within / perSide) / perSide;
+		places[picture * 4 + 3] = 1 / perSide;
+	});
 	// Unpacked, every level is a picture's own and the chain runs to one
 	// texel. Packed, it stops where a tile would be too small to filter
 	// inside.
@@ -88,5 +125,5 @@ export function packPictures(
 		keep = 1;
 		while (keep < levels && tile >> keep >= SMALLEST_TILE) keep++;
 	}
-	return { layers, perSide, side, places, levels: keep };
+	return { layers, perSide, side, places, order, levels: keep };
 }

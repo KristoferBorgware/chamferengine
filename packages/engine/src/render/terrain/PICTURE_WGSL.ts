@@ -56,9 +56,27 @@ fn onBand(uv : vec2f, place : vec4f) -> vec2f {
 	return own * place.w + place.yz;
 }
 
-/** The layer a place names. */
+/** The layer a place names, or a negative for a picture that is not stored. */
 fn layerOf(place : vec4f) -> i32 {
 	return i32(place.x);
+}
+
+/** Whether a picture is actually on the GPU. */
+fn isStored(place : vec4f) -> bool {
+	return place.x >= 0.0;
+}
+
+/**
+ * What a picture that is not stored draws as: its own average colour.
+ *
+ * **Something on the screen beats the right thing later.** A world holds a
+ * fraction of the pictures that exist, so the rest need not be uploaded -- and
+ * a block whose picture is missing should read as roughly the right colour
+ * rather than as white, as nothing, or as whoever happens to occupy that slot.
+ * The average is what the bake's own coarsest mip level already is.
+ */
+fn unstoredColor(place : vec4f) -> vec4f {
+	return vec4f(place.yzw, 1.0);
 }
 
 /**
