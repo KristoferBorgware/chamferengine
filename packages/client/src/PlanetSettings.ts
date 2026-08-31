@@ -402,6 +402,23 @@ export interface PlanetKnobs {
 	vegetation: boolean;
 
 	/**
+	 * Whether the biome table names the ground at all.
+	 *
+	 * **Off is the elevation bands, which is what the world was before there
+	 * were biomes**: grass, then bare stone over the rock line, then snow over
+	 * the snow line, read off the column's own height. Nothing else about the
+	 * ground moves -- a biome names the surface block and the layer under it
+	 * and no more, so the map, the shape, every height and every cave are the
+	 * same either way, and a player's own blocks stay where they were put.
+	 *
+	 * **A plant layer restricted to named biomes then grows everywhere**
+	 * rather than nowhere. Every shipped layer names the biomes it stands in,
+	 * so refusing them all would make this a vegetation switch as well as a
+	 * biome one -- and there is already a vegetation switch.
+	 */
+	biomeGround: boolean;
+
+	/**
 	 * The biome table: which preset it started from and every dot of it now,
 	 * as one string. {@link biomeTableFromText} is what reads it.
 	 */
@@ -1340,6 +1357,7 @@ export const PLANET_DEFAULTS: PlanetKnobs = {
 	leavesCollide: true,
 	plants: PLANT_LAYERS_DEFAULT,
 	vegetation: true,
+	biomeGround: true,
 	biomes: DEFAULT_PRESET,
 	tempEquator: 0.7,
 	tempLapse: 0.9,
@@ -1904,6 +1922,7 @@ export const KNOB_RANGES: Record<string, KnobRange> = {
 	leavesCollide: { ...TOGGLE, rebuilds: false },
 	plants: { low: 0, high: 0, step: 1, rebuilds: false, unit: "" },
 	vegetation: { ...TOGGLE, rebuilds: true },
+	biomeGround: { ...TOGGLE, rebuilds: true },
 	biomes: { low: 0, high: 0, step: 1, rebuilds: false, unit: "" },
 	tempEquator: { low: 0, high: 1, step: 0.05, rebuilds: false, unit: "" },
 	tempLapse: { low: 0, high: 3, step: 0.05, rebuilds: false, unit: "per km" },
@@ -2238,6 +2257,19 @@ export class PlanetSettings {
 	 */
 	get coarseMapRuns(): boolean {
 		return !this.knobs.plain;
+	}
+
+	/**
+	 * Whether a biome names the ground anywhere.
+	 *
+	 * Two ways it does not. **A plain planet has no coarse map**, so there is
+	 * no height for a landform to read and no continent field for the climate
+	 * to dry the air against; and **the switch is off**, which asks for the
+	 * elevation bands outright. Both leave the same world, so both are one
+	 * question here rather than two tests spelled out at every reader.
+	 */
+	get biomesRun(): boolean {
+		return this.coarseMapRuns && this.knobs.biomeGround;
 	}
 
 	/**

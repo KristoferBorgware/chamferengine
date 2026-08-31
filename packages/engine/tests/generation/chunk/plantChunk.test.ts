@@ -252,7 +252,12 @@ describe("plantChunk with a biome table", () => {
 		expect([...chunk.blocks]).toEqual(before);
 	});
 
-	it("grows nothing for a biome-restricted layer when the chunk carries no biome field", () => {
+	// **A world with no biome model restricts nothing**, which is a different
+	// answer from a table that does not hold the name -- the test above. Every
+	// shipped layer names the biomes it stands in, so refusing them all here
+	// would make turning biomes off empty the forest, and that is the
+	// vegetation switch's job rather than this one's.
+	it("grows a biome-restricted layer everywhere when the chunk carries no biome field", () => {
 		const { shape, terrain, address } = world();
 		const chunk = generateChunk(
 			terrain,
@@ -268,7 +273,35 @@ describe("plantChunk with a biome table", () => {
 			SEED,
 		);
 		expect(grown).not.toBeNull();
-		expect(grown!.plants).toBe(0);
+		expect(grown!.plants).toBeGreaterThan(0);
+	});
+
+	// And it is the layer's own restriction being ignored rather than the
+	// biome field being ignored: the same layer, the same seed, over a chunk
+	// that does have a table and does not have this biome, grows nothing.
+	it("grows the same layer as an unrestricted one would when there is no table", () => {
+		const { shape, terrain, address } = world();
+		const chunk = generateChunk(
+			terrain,
+			address,
+			CHUNK_LEVEL,
+			shape.crustDepth,
+		);
+		const restricted = plantChunk(
+			chunk,
+			terrain,
+			shape,
+			[layerOf(1, "Pine", 40, [ONLY_BIOME])],
+			SEED,
+		);
+		const open = plantChunk(
+			generateChunk(terrain, address, CHUNK_LEVEL, shape.crustDepth),
+			terrain,
+			shape,
+			[layerOf(1, "Pine", 40, [])],
+			SEED,
+		);
+		expect(restricted!.plants).toBe(open!.plants);
 	});
 });
 

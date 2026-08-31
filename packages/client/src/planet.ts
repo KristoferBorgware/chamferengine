@@ -1110,10 +1110,11 @@ async function main(): Promise<void> {
 			plants: live.knobs.vegetation
 				? live.plantLayers.map(plantLayerOf)
 				: [],
-			// **The world's own ground names, the same way.** A plain planet
-			// has no coarse map for a landform to read, so it has no biomes
-			// either.
-			biomes: live.coarseMapRuns
+			// **The world's own ground names, the same way.** No table
+			// crosses where none names the ground: a plain planet has no
+			// coarse map for a landform to read, and the biome switch turns
+			// it off outright. The worker then paints the elevation bands.
+			biomes: live.biomesRun
 				? {
 						biomes: live.biomeTable.biomes,
 						grid: live.biomeTable.grid,

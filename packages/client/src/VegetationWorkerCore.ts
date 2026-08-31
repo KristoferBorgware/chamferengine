@@ -339,9 +339,10 @@ export class VegetationWorkerCore {
 				seaLevel: 0,
 				templates: this.templates,
 				biomeAt,
-				biomeMasks: biomeField
-					? plantBiomeMasks(layers, table.biomes)
-					: null,
+				biomeMasks: plantBiomeMasks(
+					layers,
+					biomeField ? table.biomes : null,
+				),
 			},
 		);
 
