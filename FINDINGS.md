@@ -2761,6 +2761,54 @@ is the only place a decrement would go.
 
 ---
 
+### F-147 — The biome height axis is a share of Relief, which is not the tallest ground the world can reach
+
+**Kind:** bug
+**Milestone:** 0.5.0
+**Priority:** medium
+**Effort:** small
+**Found:** 2026-08-31, tracing what the Relief knob reaches while reading the coarse map
+**Where:** `packages/client/src/PlanetSettings.ts` (`maxElevation`, `biomeSettings`'s
+`groundTop`), `packages/engine/src/generation/biomes/LandformGrid.ts`
+(`RISE_EDGES`), `packages/engine/src/generation/coarse/maxElevationFor.ts`
+
+**What happens.** The landform grid's fourth axis, `rise`, is a height divided
+by `groundTop` and clamped to `1`. `RISE_EDGES` says in its own comment that it
+is **a share of the world's tallest ground**, and the client passes
+`maxElevation`, which is `Math.ceil(relief)` -- Relief alone. The tallest ground
+a world can reach is `relief + peakRelief`, because peaks and valleys adds a
+full peak on top of the level continentalness set. The engine already has a
+function that says exactly that, `maxElevationFor`, and `PlanetSettings.ts`
+**imports it and never calls it**.
+
+At the shipped knobs the two differ by `220 m` of `1,020 m`, so every share is
+read against a top that is `21.6%` too low and the `high` band starts `77 m`
+lower than the axis claims. Measured on one seed at map level 6, over the
+`15,151` land cells of a `40,962`-cell map: the `high` rise band holds
+**`14.86%`** of land as shipped and **`5.47%`** against the true reachable top,
+a factor of `2.7`. The clamp itself does nothing at that seed -- `0.00%` of land
+stands above Relief, because the continentalness curve and the erosion bite
+together rarely reach the top of the range -- so this is the divisor and not the
+clamp.
+
+**Why it matters.** The `rise` axis is what makes a peak *high* as well as
+sharp, and it is one of the four axes deciding which of the six landforms a
+place is. A band holding nearly three times the land it names moves which
+biomes are reachable over a large share of every world -- and it moves with
+Peak relief, which nobody would expect a landform boundary to answer to. It is
+also the one axis whose stated meaning and passed value disagree, which is the
+kind of thing that is read as correct forever.
+
+**What would fix it.** Call `maxElevationFor(this.coarseOptions())` where
+`maxElevation` is passed as `groundTop`, and leave the `shape()` use alone --
+that one wants a crust top and is already superseded by `shapeFor(map)`, which
+takes the map's real peak. **The edges will need re-measuring with it**: they
+were tuned against the current divisor, so changing it without moving
+`RISE_EDGES` trades one wrong band for another. Half an hour for the change and
+a bench sweep for the edges.
+
+---
+
 ## Closed
 
 ### F-145 — Every level of detail walks and draws the cave field, and only the nearest can show a cave
