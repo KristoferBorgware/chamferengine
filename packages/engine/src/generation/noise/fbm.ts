@@ -1,3 +1,4 @@
+import type { NoiseCorners } from "./NoiseCorners.js";
 import { valueNoise3 } from "./valueNoise3.js";
 
 /**
@@ -20,6 +21,13 @@ import { valueNoise3 } from "./valueNoise3.js";
  * directions the standard deviation is `0.244` of the amplitude, so a stated
  * relief of 60 m is a typical swing of about 15 m, reaching 60 only where
  * several octaves happen to align.
+ *
+ * **`corners` is a memo and never an answer**, one slot per octave from
+ * `slot`: {@link valueNoise3} checks the cell and the seed before trusting a
+ * slot, so a caller reading points in any order gets the bits it would have
+ * got with no cache at all. What it is for is a walk down a column, where the
+ * sample point crosses a lattice cell of the widest octave once in dozens of
+ * readings and the hashes are the whole cost.
  */
 export function fbm(
 	x: number,
@@ -28,13 +36,17 @@ export function fbm(
 	frequency: number,
 	octaves: number,
 	seed: number,
+	corners: NoiseCorners | null = null,
+	slot = 0,
 ): number {
 	let sum = 0;
 	let amplitude = 1;
 	let total = 0;
 	let f = frequency;
 	for (let o = 0; o < octaves; o++) {
-		sum += amplitude * valueNoise3(x * f, y * f, z * f, seed);
+		sum +=
+			amplitude *
+			valueNoise3(x * f, y * f, z * f, seed, corners, slot + o);
 		total += amplitude;
 		amplitude *= 0.5;
 		f *= 2;

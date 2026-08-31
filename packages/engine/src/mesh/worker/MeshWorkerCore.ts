@@ -239,6 +239,18 @@ export class MeshWorkerCore {
 				// of that level's leaves into the colour of the ground. See
 				// {@link CUTOUT_REACH}.
 				cutoutLeaves: this.cutoutLeaves && job.lod <= CUTOUT_REACH,
+				// **The sealed-air flood runs only where it can find anything.**
+				// It costs about a tenth of a caveless chunk's mesh time and
+				// can find nothing there: a sealed stretch needs below-ground
+				// air, which only the cave pass and a player's own digging
+				// make. So it runs where the caves are carved at all, and on
+				// any chunk carrying edits -- a hidden room someone built is
+				// exactly a sealed stretch, and rebuilding on a break is what
+				// makes its walls appear the moment a shaft reaches it.
+				cullSealed:
+					(this.options.caves === true &&
+						job.lod <= CAVE_DETAIL_REACH) ||
+					(job.deltas?.length ?? 0) > 0,
 				// The canopy that is a colour rather than a block: what a
 				// plant becomes once this level's grid is more than twice as
 				// wide as it is.
