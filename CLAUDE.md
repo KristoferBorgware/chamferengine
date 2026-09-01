@@ -1206,7 +1206,10 @@ Violating any of these breaks the design. They are not tunable.
   it `60 m` takes the shipped world from **35% sea to 14%**, and what comes out
   from under it is the shallow floor that was already there.
 - **TWO ELEVATIONS CUT THE LAND INTO THREE BANDS, IN ABSOLUTE METRES**
-  (`GROUND_LINES`, `material`, doc 08). Water under 0, grass to **300 m**, bare
+  (`GROUND_LINES`, `material`, doc 08). **The biome table names the surface
+  ahead of these lines** -- what is left to them is a world with no biome
+  field, the sea, and the soil below the surface, which the rock line still
+  cuts to stone. Water under 0, grass to **300 m**, bare
   stone to **400 m**, snow over it — and over the rock line the soil is gone
   through its **whole** depth, so a hillside that high is rock where it is cut
   into as well as where it is walked on. **The metres are absolute because the
@@ -1227,6 +1230,118 @@ Violating any of these breaks the design. They are not tunable.
   not a second material, so shading it drew sea floors the world does not have,
   and Height is the picture depth is read from. `Height` keeps its blend,
   because it answers a different question.
+- **THE BIOME TABLE NAMES THE SURFACE BLOCK, AND CLIMATE NAMES THE BIOME**
+  (`BiomeField`, `biomeOf`, `BIOME_PRESETS`, `material`). `TerrainGenerator`
+  asks the table at the surface layer alone and takes what it says; the snow
+  and rock lines above only run where there is no biome field or the reading
+  is sea, and the rock line still cuts soil to stone below the surface. **One
+  preset, `plain`, twenty-one grounds.** The model is two stages: the terrain
+  names a **landform**, and the climate then picks the nearest dot among the
+  biomes that landform allows -- a Voronoi over a temperature-and-humidity
+  square. **Sixteen of the twenty-one are filed under no landform at all**, so
+  for them the second stage is the whole of it. Filing every ground to one
+  landform is the alternative and it draws a boundary wherever the relief
+  curve crosses a threshold, which changes hillside to hillside: measured over
+  four seeds at one-degree steps, **`20.17%`** of neighbouring land samples
+  disagree about which biome they are in against **`7.36%`** for the table
+  that ships. **The five that are filed name a landform rather than a
+  climate** -- three shore grounds, two summit ones -- because a beach is
+  where the land meets the water and no reading of the air can say that.
+  **The shore is the one landform a filed biome takes outright**
+  (`allowedBiomes`): a coast reads the most crowded corner of the square, so a
+  beach merely added to that crowd never wins.
+  **AND A NAME SAYS A CLIMATE, NEVER A LANDFORM.** Ice sheet, Permafrost,
+  Snowfield, Prairie, Scrubland and Savanna were each named for the ground
+  they stood on while every ground was filed to one landform, and a name
+  carrying a landform tells a player something untrue the moment that ground
+  turns up in a valley. **Badlands is the case that decides it**: filed to
+  `plateau` -- a reading of the relief curve -- it drew the shoulders of every
+  ridge as a red ribbon rather than a place, and red rock is what an arid
+  climate does to stone, which makes it a climate the way a desert is.
+- **THE DOTS WERE SOLVED, NOT CHOSEN** (`PLAIN` in `BIOME_PRESETS`). An even
+  grid over the square is the obvious layout and it is not a balanced one:
+  every climate term is a noise stack summed and divided, so the readings pile
+  in the middle and thin toward every edge. Four placements, measured against
+  the share of land each ground takes: an even grid **`5.4 : 1`** widest to
+  narrowest, each axis at its own quantiles **`6.3 : 1`**, each temperature
+  band at its own **`2.4 : 1`**, and relaxed until the shares agree
+  **`1.26 : 1`** -- `6.85%` down to `5.43%` of the land. **A cell of a plain
+  Voronoi grows when its dot moves TOWARD a crowded neighbour**, so the
+  sixteen are stepped that way until the counts stop separating, holding two
+  orderings so no name loses its meaning: bands ordered by temperature, and
+  inside a band dry to wet. **Lloyd relaxation is the wrong tool** at
+  `5.6 : 1` -- it equalises a cell's spread, not its share, and starves the
+  same ground. What that leaves is a layout with no grid left in it: nothing
+  is a row of equal temperature, no two dots share a humidity, and no four
+  biomes meet at a point.
+- **THE LANDFORM GRID READS FOUR AXES AND ONLY THE FOURTH IS A SIZE**
+  (`LandformGrid`, `gridAt`, `landformAt`). How far inland, how worn, and how
+  far the relief swings all say what a place is *like* and none says how far
+  above the sea it ends up -- so `peaks` meant **sharp**, which named a summit
+  and a small steep butte with one reading, and the two grounds filed to peaks
+  are bare rock and snow. The height axis is what lets the grid say the thing
+  itself rather than a rule bolted on after the lookup. **Its edges are a
+  share of the ground the world reaches** (`RISE_EDGES`, `groundTop`), because
+  the other three are curves' answers and mean the same thing on every planet
+  while a metre does not: measured over four seeds at reliefs of 300, 600 and
+  900 m, land divides into near-thirds at **`0.15` and `0.35`** on all three,
+  where a fixed metre line keeps `95%` of the peaks on a tall world and `1%`
+  on a low one. A grid is **six sheets, fifty-four cells** -- one per
+  continentalness and height, each a row per erosion band and a column per
+  relief band -- and `riseGrid` spreads an eighteen-cell grid written before
+  the axis across it, which leaves the world it named unchanged. **The shore
+  is the only rule left beside the grid**, because it needs the room count and
+  no curve carries that.
+- **THE CLIMATE SQUARE IS ONE CONSTANT SPAN, AND IT IS RE-MEASURED WHENEVER
+  THE CLIMATE GAINS A TERM** (`LAPSED_FIT`, `measureFit`). A stretch measured
+  from each planet's own land makes two worlds name one raw reading two
+  different biomes; mapping the raw range straight through leaves the corners
+  of the square as ground nobody stands on. A constant measured over many
+  worlds keeps both. **A fit is measured against a climate model, so a term
+  added under it invalidates the constant**: a span taken before the humidity
+  lapse existed starts too high once that lapse is on, and measured over six
+  seeds humidity then reached only `0.00` to `0.77` of the square with a
+  median of `0.34` and **`17.1%` of all land clamped flat against the dry
+  edge** -- a sixth of the planet pinned onto one column of the diagram, which
+  is what made a world read as tundra and cold desert whatever its dots said.
+  Re-measured at the shipped lapse and dry belts it reads `0.00` to `0.99`,
+  median `0.57`, `2.6%` clamped. `BiomeField` still measures a span for a
+  caller that names none, which is a bench isolating one term.
+- **THE TERRAIN REACHES THE BIOME THROUGH TWO LAPSES AND NOTHING ELSE**
+  (`climateAt`, `tempLapse`, `humLapse`). Air cools as the ground rises and,
+  at the shipped `0.6` per km, dries as it rises too -- the altitude is the
+  **coarse map's** height at that place, metres above sea level, read through
+  the same two steps `blockAtPosition` takes, so a biome and the ground under
+  it agree at the map's own resolution. **That is the whole of how a summit
+  gets snow and a desert stays off one**: no landform rule forbids a desert
+  anywhere, the air up there simply never reads hot. **It also correlates the
+  two readings**, because both lapses read the same height -- `+0.269` over
+  the land, which leaves hot-and-arid the thinnest corner of the chart and
+  made a desert a seed's luck.
+- **THE DRY BELTS MOVE MOISTURE RATHER THAN REMOVING IT** (`beltAt`,
+  `humBelt`). Every other humidity term reads the ground -- how far inland,
+  how high, and noise -- and none of them can say *be arid here*, which is
+  what Earth's belts of descending air do. The term is a bump on the sine of
+  the latitude with **its own share of the sphere taken back off**, so the
+  belt is dried and the rest of the world is wetted by exactly what the belt
+  lost: turning it up cannot dry the planet, which is the trap `humOcean`
+  falls into. That share is exact rather than sampled, because area on a
+  sphere is uniform in that sine, so the bump's mean over the planet is its
+  own integral. Measured over six seeds, the correlation between temperature
+  and humidity goes `+0.262` to **`-0.065`**, and Desert goes from ground no
+  seed reliably had to **`5.68%` of the land on `6/6` seeds**. The bump is
+  `(1 - d^2)^2` and not `1 - d^2`, because the plain parabola meets zero with
+  a slope still on it and that kink draws as a line of its own at both edges
+  of the belt. Polynomial throughout: two clients have to agree on the ground
+  to the bit (doc 23). **Zero is bit-for-bit the world without it.**
+- **A RETIRED BLOCK NUMBER STAYS RETIRED** (`BlockType`, `BLOCK_NAMES`).
+  Numbers **55 to 77** were a second biome set this build no longer carries.
+  A number is a block's identity in a save's registry, so a retired one is
+  never handed to something else -- a world written when they meant something
+  else would silently rename its ground. The constants are gone from
+  `BlockType`; `BLOCK_NAMES` still holds all twenty-three strings, which is
+  the whole reason that list exists. The generator draws pictures from the
+  `BlockType` keys, so the bake follows on its own.
 - **THE LAYER FIELD IS 11 BITS, AND THE ELEVENTH IS THE LAST ONE THE WORD HAS**
   (`cellIdLayout`, doc 03). `[planet 12][face 5][path 2D][corner 2][layer 11]` is
   `30 + 2D`, which at `D` 17 comes to **exactly 64** — so this bit was free and a
@@ -2569,6 +2684,10 @@ Violating any of these breaks the design. They are not tunable.
 | `cell` | one hexagon (or one of the 12 pentagons) at one layer |
 | `chunk` | one triangle at `chunkLevel`, the load/store unit |
 | `direction index` | 0–5 (0–4 on a pentagon) into a cell's CCW neighbour ring |
+| `landform` | what the terrain calls a place: shore, valleys, lowlands, slopes, plateau, peaks |
+| `biome` | what the climate calls it; names the surface block |
+| `climate square` | the temperature-and-humidity unit square a biome's dot sits in |
+| `fit` | the span raw climate readings are stretched onto to reach that square |
 | `holonomy` | rotation a carried heading gains around a closed loop |
 
 `depth` is overloaded in casual speech. In code and docs, always qualify:
