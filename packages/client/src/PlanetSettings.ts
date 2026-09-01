@@ -1313,7 +1313,7 @@ export const PLANET_DEFAULTS: PlanetKnobs = {
 	// worth calling one; this has to swing several times inside a crust a
 	// couple of hundred metres deep or what comes out is a lowered surface
 	// rather than an overhang.
-	carveLayer: true,
+	carveLayer: false,
 	carveHold: 30,
 	carveFeature: 120,
 	carveFeatureScale: 1,

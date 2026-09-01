@@ -981,6 +981,12 @@ async function main(): Promise<void> {
 	 * here is given as far as the ray could possibly meet the planet from
 	 * where the player's eye already is, so aiming past the horizon still
 	 * lands on the ground the crosshair is actually over.
+	 *
+	 * **Exactly onto it, not {@link land}'s 1.2 m clearance.** That clearance
+	 * is for a teleport that might still be flying afterwards, so it keeps
+	 * the traveller clear of whatever is at the destination; this always
+	 * switches to walking, so keeping the flying altitude instead would land
+	 * high over the very ground the cursor pointed at.
 	 */
 	function landAtCursor(): void {
 		if (!aimedFrom || !aimedLook) return;
@@ -991,8 +997,14 @@ async function main(): Promise<void> {
 			player.eye.length() + shape.crustTopRadius,
 		);
 		if (!walked) return;
-		land(aimedFrom.add(aimedLook.scale(walked.distance)));
+		const direction = aimedFrom
+			.add(aimedLook.scale(walked.distance))
+			.normalize();
+		player.position = direction.scale(standingRadius(direction));
+		player.heading = direction.cross(new Vec3(0, 1, 0)).normalize();
+		player.fall = 0;
 		flying = false;
+		refresh();
 	}
 
 	/**
@@ -1660,6 +1672,16 @@ async function main(): Promise<void> {
 		() => edits,
 		() => plantCells,
 	);
+
+	// **The world opens standing on it, not looking down from above.** The
+	// spawn scan above only ever found a direction -- turning that into a
+	// floor needs `standingRadius`, which reads `blockAt` and so could not run
+	// until now. This is still ahead of the first frame, so there is no
+	// falling-in to see: the placeholder position `player` was built with is
+	// simply never drawn.
+	player.position = ground.scale(standingRadius(ground));
+	player.fall = 0;
+	flying = false;
 
 	/**
 	 * What a ray walk asks the world about.
