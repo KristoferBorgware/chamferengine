@@ -13,6 +13,24 @@ import { GROUND_LINES } from "./GROUND_LINES.js";
  * to be turned against each other with nothing to look at.
  */
 export interface TerrainOptions {
+	/**
+	 * Whether the ground is stone all the way through, with no material rule
+	 * at all.
+	 *
+	 * **For a world with nothing left to name its surface.** Soil, sand, the
+	 * rock line and the snow line are what a world falls back on when no biome
+	 * speaks, and a fallback that reads as a finished planet is a fallback
+	 * nobody can tell from the real thing -- so where the biome model is the
+	 * only thing allowed to say what the ground is made of, its absence has to
+	 * look like an absence. Every block below is stone, sea bed and summit
+	 * alike, and the elevations below are not read.
+	 *
+	 * **It moves no ground.** The height, the carve and the caves are all
+	 * upstream of the material rule, so a world turned bare is the same shape
+	 * as the world beside it in every block -- only grey.
+	 */
+	readonly bareRock?: boolean;
+
 	/** How deep the soil runs before stone starts, in blocks. */
 	readonly soilDepth?: number;
 
@@ -127,6 +145,7 @@ export interface TerrainOptions {
 }
 
 export const TERRAIN_DEFAULTS = {
+	bareRock: false,
 	carveLayer: false,
 	carve: CARVE_LAYER_DEFAULT,
 	carveHold: WATERLINE_REACH * CARVE_LAYER_DEFAULT.metres,

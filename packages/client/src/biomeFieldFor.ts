@@ -12,8 +12,9 @@ import type { PlanetSettings } from "./PlanetSettings.js";
  * block reads -- and every one of them has to name the same ground the
  * chunks a worker draws do, so this is the same construction
  * {@link biomeWorldFor} gives a worker's setup, called from the thread that
- * already holds the map. `null` for a plain planet, which has no coarse map
- * for a landform to read.
+ * already holds the map. `null` wherever no biome names the ground -- a plain
+ * planet, which has no coarse map for a landform to read, or the biome switch
+ * turned off -- and the terrain then falls back to its elevation bands.
  */
 export function biomeFieldFor(
 	seed: number,
@@ -21,7 +22,7 @@ export function biomeFieldFor(
 	map: CoarseMap,
 	settings: PlanetSettings,
 ): BiomeField | null {
-	if (!settings.coarseMapRuns) return null;
+	if (!settings.biomesRun) return null;
 	const table = settings.biomeTable;
 	return new BiomeField(
 		biomeWorldFor(

@@ -2729,6 +2729,114 @@ is the only place a decrement would go.
 
 ---
 
+### F-147 — The biome height axis is a share of Relief, which is not the tallest ground the world can reach
+
+**Kind:** bug
+**Milestone:** 0.5.0
+**Priority:** medium
+**Effort:** small
+**Found:** 2026-08-31, tracing what the Relief knob reaches while reading the coarse map
+**Where:** `packages/client/src/PlanetSettings.ts` (`maxElevation`, `biomeSettings`'s
+`groundTop`), `packages/engine/src/generation/biomes/LandformGrid.ts`
+(`RISE_EDGES`), `packages/engine/src/generation/coarse/maxElevationFor.ts`
+
+**What happens.** The landform grid's fourth axis, `rise`, is a height divided
+by `groundTop` and clamped to `1`. `RISE_EDGES` says in its own comment that it
+is **a share of the world's tallest ground**, and the client passes
+`maxElevation`, which is `Math.ceil(relief)` -- Relief alone. The tallest ground
+a world can reach is `relief + peakRelief`, because peaks and valleys adds a
+full peak on top of the level continentalness set. The engine already has a
+function that says exactly that, `maxElevationFor`, and `PlanetSettings.ts`
+**imports it and never calls it**.
+
+At the shipped knobs the two differ by `220 m` of `1,020 m`, so every share is
+read against a top that is `21.6%` too low and the `high` band starts `77 m`
+lower than the axis claims. Measured on one seed at map level 6, over the
+`15,151` land cells of a `40,962`-cell map: the `high` rise band holds
+**`14.86%`** of land as shipped and **`5.47%`** against the true reachable top,
+a factor of `2.7`. The clamp itself does nothing at that seed -- `0.00%` of land
+stands above Relief, because the continentalness curve and the erosion bite
+together rarely reach the top of the range -- so this is the divisor and not the
+clamp.
+
+**Why it matters.** The `rise` axis is what makes a peak *high* as well as
+sharp, and it is one of the four axes deciding which of the six landforms a
+place is. A band holding nearly three times the land it names moves which
+biomes are reachable over a large share of every world -- and it moves with
+Peak relief, which nobody would expect a landform boundary to answer to. It is
+also the one axis whose stated meaning and passed value disagree, which is the
+kind of thing that is read as correct forever.
+
+**What would fix it.** Call `maxElevationFor(this.coarseOptions())` where
+`maxElevation` is passed as `groundTop`, and leave the `shape()` use alone --
+that one wants a crust top and is already superseded by `shapeFor(map)`, which
+takes the map's real peak. **The edges will need re-measuring with it**: they
+were tuned against the current divisor, so changing it without moving
+`RISE_EDGES` trades one wrong band for another. Half an hour for the change and
+a bench sweep for the edges.
+
+---
+
+### F-148 — A column is walked from the top of the world, so ground nobody built costs what ground does
+
+**Kind:** performance
+**Milestone:** 0.5.0
+**Priority:** medium
+**Effort:** small
+**Found:** 2026-08-31, asking whether a shallower crust would build a world faster
+**Where:** `packages/engine/src/generation/terrain/TerrainGenerator.ts`
+(`fillColumn`), measured by `tools/trial-column-cost.ts` and
+`tools/trial-crust-depth.ts`
+
+**What happens.** `fillColumn` loops from layer `0` to `openTo`, and layer 0
+is above the planet's **tallest** ground rather than above this column's. So a
+column asks `blockAt` once for every layer of air standing over it, writes
+`AIR` into an array that a fresh `Uint16Array` already holds as zero, and only
+then reaches its own surface. How much air that is, is `maxElevation` -- how
+far the crust top stands over sea level -- so it is a property of the tallest
+mountain **anywhere on the planet** and is paid by every column that is
+nowhere near one.
+
+Measured over the shipped world at depth 13, a 1 m block and a crust top
+`734 m` over the sea, 4,000 columns at each end of the elevation range, with
+the cliffs layer **off** so nothing else dominates: the deepest columns (mean
+`-278 m`, so about `1,012` layers of air over them) cost **`51.96 us`** each
+against **`22.77 us`** for the highest (mean `433 m`, about `301` layers) --
+**`2.3x`**, in the direction and roughly the ratio the walked-layer counts
+predict.
+
+**It is invisible with the cliffs layer on**, which is why it has not been
+noticed: the carve's own reach is `120` layers of real evaluation and it does
+most of that work where there is rock, so a high column costs **`85.57 us`**
+against a deep one's `67.65 us` and the ordering reverses. Turning the carve
+off is itself `3.8x` on a high column.
+
+The same measurement settles the question that turned it up. Holding one
+world and varying only the room under it -- 1,162, 1,232, 1,500 and 2,048
+layers -- generate runs `142 / 130 / 133 / 138 ms` a chunk, which is noise,
+while a chunk's blocks grow `4.9 / 5.2 / 6.3 / 8.6 MB`. **Spare crust costs
+memory and not time.** What costs time is how far the crust *top* stands over
+the ground being built.
+
+**Why it matters.** It prices the ceiling. Raising the tallest mountain a
+world allows makes every ocean column slower, for ground that column does not
+have -- so a knob a person reaches for to shape the mountains is silently a
+performance knob for the sea floor. Any model that states its terrain height
+as a share of a world ceiling makes that coupling tighter, because the ceiling
+is then the number being tuned.
+
+**What would fix it.** Start the loop at the column's own ground rather than
+at zero: `AIR` is `0` and a chunk's block array is freshly zeroed, so every
+write above the surface is already the value that is there. The band is the
+one thing that needs care -- `last` is the deepest air layer seen, so it has
+to be seeded to `groundLayer - 1` rather than found by walking -- and
+`carveRun` already skips the same range with `out.fill(1, 0, from)`, so the
+shape of the fix is written down next to it. Half an hour, one function, and
+the test to hold it is that a chunk's blocks and band come out identical
+either way.
+
+---
+
 ## Closed
 
 ### F-146 — "Cave geometry is culled by enclosure" is designed and not built, so sealed caves are meshed and drawn
