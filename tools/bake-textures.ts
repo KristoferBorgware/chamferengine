@@ -316,6 +316,10 @@ for (const [name, slots] of Object.entries(manifest.blocks)) {
 	table[block * SLOTS + 3] = slots.overlay ? pick(slots.overlay, -1) : -1;
 }
 
+// **Indented, because the repository formats what it holds.** The file is
+// committed, and `prettier` reformats a minified one on sight -- so a bake
+// that wrote one line left a dirty tree behind every single time, and the
+// diff said the pictures had changed when only the whitespace had.
 writeFileSync(
 	join(out, "blocks.json"),
 	`${JSON.stringify(
@@ -328,6 +332,7 @@ writeFileSync(
 			table: [...table],
 		},
 		null,
+		"\t",
 	)}\n`,
 );
 

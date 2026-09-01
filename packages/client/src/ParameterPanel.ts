@@ -221,22 +221,13 @@ interface Group {
 	readonly side?: "left" | "right";
 
 	/**
-	 * Which of the right pane's two tabs the group stands under.
-	 *
-	 * Ignored on the bench, which has no tabs, and ignored on a group marked
-	 * {@link Group.aboveTabs}. `"settings"` unless stated, because that is
-	 * what most of the panel is.
-	 */
-	readonly tab?: "terrain" | "settings";
-
-	/**
-	 * Whether the group sits above both tabs, in neither of them.
+	 * Whether the group stands at the top of the panel, before every other.
 	 *
 	 * For the one section that is not really a setting: the map is where a
-	 * click stands the player somewhere, which is a thing to reach whichever
-	 * tab is open, not a knob filed under one of two questions.
+	 * click stands the player somewhere, which is a thing to reach without
+	 * scrolling past the knobs.
 	 */
-	readonly aboveTabs?: boolean;
+	readonly first?: boolean;
 
 	/**
 	 * The colour this group's heading and its curve are drawn in.
@@ -618,7 +609,6 @@ const GROUPS: Group[] = [
 		title: "Readout",
 		where: "world",
 		folded: true,
-		tab: "settings",
 		knobs: [],
 	},
 	{
@@ -629,17 +619,16 @@ const GROUPS: Group[] = [
 		// in.
 		title: "Map",
 		where: "world",
-		aboveTabs: true,
+		first: true,
 		knobs: [],
 	},
 	{
 		title: "Continentalness",
-		where: "both",
+		where: "bench",
 		veg: "off",
 		cave: "off",
 		biome: "off",
 		folded: true,
-		tab: "terrain",
 		tint: "cont",
 		knobs: layerKnobs(
 			"continent",
@@ -648,12 +637,11 @@ const GROUPS: Group[] = [
 	},
 	{
 		title: "Erosion",
-		where: "both",
+		where: "bench",
 		veg: "off",
 		cave: "off",
 		biome: "off",
 		folded: true,
-		tab: "terrain",
 		tint: "ero",
 		knobs: [
 			...layerKnobs("erosion", "Erosion → how much it cuts away"),
@@ -673,23 +661,21 @@ const GROUPS: Group[] = [
 	},
 	{
 		title: "Peaks & valleys",
-		where: "both",
+		where: "bench",
 		veg: "off",
 		cave: "off",
 		biome: "off",
 		folded: true,
-		tab: "terrain",
 		tint: "pv",
 		knobs: layerKnobs("peaks", "Peaks & valleys → the relief itself"),
 	},
 	{
 		title: "Cliffs & overhangs",
-		where: "both",
+		where: "bench",
 		veg: "off",
 		cave: "off",
 		biome: "off",
 		folded: true,
-		tab: "terrain",
 		tint: "cliff",
 		knobs: [
 			...layerKnobs("carve", "Noise → density"),
@@ -1001,13 +987,12 @@ const GROUPS: Group[] = [
 	},
 	{
 		title: "Ground",
-		where: "both",
+		where: "bench",
 		veg: "off",
 		cave: "off",
 		biome: "off",
 		side: "left",
 		folded: true,
-		tab: "terrain",
 		knobs: [
 			{
 				key: "relief",
@@ -1048,6 +1033,30 @@ const GROUPS: Group[] = [
 		],
 	},
 	{
+		// **What the ground is called, which is not what shapes it.** The
+		// table -- every dot of it, the climate it is read at and the
+		// landform grid it is filed under -- is chosen on the biome bench and
+		// travels in the link; this is the one row about it the world itself
+		// has, and it is whether the ground is named at all.
+		title: "Biomes",
+		where: "world",
+		folded: true,
+		knobs: [
+			{
+				key: "biomeGround",
+				label: "Name the ground",
+				says:
+					"off is the elevation bands the world had before biomes " +
+					"-- grass, then bare stone over the rock line, then snow " +
+					"-- so no height moves and no cave closes, only what the " +
+					"surface is made of. It takes the plants with it, " +
+					"because a biome is what decides which of them grows " +
+					"where and there is nothing else that does. Which " +
+					"biomes, and where, is the biome bench.",
+			},
+		],
+	},
+	{
 		// **What grows on the world, which is not what shapes it.** The kinds
 		// of plant are chosen on the vegetation bench and travel in the link;
 		// this is the one row about them the world itself has, and it is
@@ -1055,15 +1064,21 @@ const GROUPS: Group[] = [
 		title: "Vegetation",
 		where: "world",
 		folded: true,
-		tab: "terrain",
 		knobs: [
 			{
 				key: "vegetation",
 				label: "Grow the plants",
+				// **Still a knob, and turned off from somewhere else**, which
+				// is what greys a row rather than taking it away: a reader
+				// who wants the forest back needs to be shown that the switch
+				// exists and that this is not where it is refusing.
+				enabledWhen: (k) => k.biomeGround,
 				says:
 					"a plant is blocks, so a chunk grows its own -- which adds " +
 					"a pass about as long as the one that makes its ground. " +
-					"Which plants, and where, is the vegetation bench.",
+					"Nothing grows with the biomes off, because a biome is " +
+					"what decides which plant stands where. Which plants, " +
+					"and where, is the vegetation bench.",
 			},
 		],
 	},
@@ -2026,53 +2041,16 @@ export class ParameterPanel {
 
 		const handled = new Set<Group>();
 
-		// **The map stands above both tabs.** It is where a click stands the
-		// player somewhere, which wants to be reachable whichever tab is
-		// open, not filed under one of two questions the way a knob is.
+		// **The map stands first.** It is where a click stands the player
+		// somewhere, which wants to be reachable without scrolling past the
+		// knobs, rather than filed among them.
 		if (!this.bench)
 			for (const group of GROUPS) {
 				if (!this.shows(group)) continue;
-				if (!group.aboveTabs) continue;
+				if (!group.first) continue;
 				body.appendChild(buildSection(group));
 				handled.add(group);
 			}
-
-		// **Two tabs on the right pane, nowhere else.** The bench already has
-		// two panels for two different questions (what the world came out as,
-		// and the knobs that decide the ground) and has no use for a third
-		// split. Here there is one panel and twenty-some groups in it, and
-		// the split that matters is the same one the bench's two panels
-		// draw: the ground itself against everything about how it is shown.
-		let terrainTab: HTMLElement | null = null;
-		let settingsTab: HTMLElement | null = null;
-		if (!this.bench) {
-			const tabs = document.createElement("div");
-			tabs.className = "knobs-tabs";
-			const terrainButton = document.createElement("button");
-			terrainButton.textContent = "Terrain";
-			const settingsButton = document.createElement("button");
-			settingsButton.textContent = "Settings";
-			tabs.append(terrainButton, settingsButton);
-			body.appendChild(tabs);
-
-			terrainTab = document.createElement("div");
-			settingsTab = document.createElement("div");
-			body.append(terrainTab, settingsTab);
-
-			const select = (tab: "terrain" | "settings"): void => {
-				terrainButton.classList.toggle("active", tab === "terrain");
-				settingsButton.classList.toggle("active", tab === "settings");
-				terrainTab!.hidden = tab !== "terrain";
-				settingsTab!.hidden = tab !== "settings";
-			};
-			terrainButton.onclick = () => select("terrain");
-			settingsButton.onclick = () => select("settings");
-			// **Settings, not Terrain.** Most of what a returning visitor
-			// reaches for -- the light, the player, the sea -- lives there,
-			// and Terrain is one click away when it is the ground being
-			// tuned.
-			select("settings");
-		}
 
 		// A group is a fold, and only the first is open. Twenty-six rows at one
 		// prominence is the thing this release set out to fix, and the order
@@ -2084,11 +2062,7 @@ export class ParameterPanel {
 			const side =
 				this.page === "cave" ? (group.cave ?? group.side) : group.side;
 			const into =
-				side === "left" && this.leftBody
-					? this.leftBody
-					: (((group.tab ?? "settings") === "terrain"
-							? terrainTab
-							: settingsTab) ?? body);
+				side === "left" && this.leftBody ? this.leftBody : body;
 			into.appendChild(buildSection(group));
 		}
 

@@ -817,7 +817,7 @@ async function main(): Promise<void> {
 				seed,
 				shape.atLod(lod),
 				map,
-				settings.terrainOptions(),
+				settings.worldTerrainOptions(),
 				biomeField,
 			),
 		);
@@ -1114,18 +1114,27 @@ async function main(): Promise<void> {
 						faces: live.knobs.gridFaces,
 					}
 				: undefined,
-			terrain: live.terrainOptions(),
+			terrain: live.worldTerrainOptions(),
 			// **The world's own forest, out of the world's own link.** Which
 			// kinds of plant it grows is part of the definition a link
 			// carries, the same way its relief is -- the vegetation bench is
 			// where that is chosen and this is where it is grown.
-			plants: live.knobs.vegetation
-				? live.plantLayers.map(plantLayerOf)
-				: [],
-			// **The world's own ground names, the same way.** A plain planet
-			// has no coarse map for a landform to read, so it has no biomes
-			// either.
-			biomes: live.coarseMapRuns
+			//
+			// **A biome is what decides a plant, so no biome is no plant.**
+			// Every layer names the biomes it stands in, and a world that
+			// never says what biome anywhere is has nothing to answer that
+			// with -- so a forest under no biome model would be every
+			// species everywhere, which is a different world rather than a
+			// simpler one. The switch takes the plants with it.
+			plants:
+				live.knobs.vegetation && live.biomesRun
+					? live.plantLayers.map(plantLayerOf)
+					: [],
+			// **The world's own ground names, the same way.** No table
+			// crosses where none names the ground: a plain planet has no
+			// coarse map for a landform to read, and the biome switch turns
+			// it off outright. The worker then paints the elevation bands.
+			biomes: live.biomesRun
 				? {
 						biomes: live.biomeTable.biomes,
 						grid: live.biomeTable.grid,
@@ -2031,7 +2040,7 @@ async function main(): Promise<void> {
 					nextSeed,
 					shape.atLod(lod),
 					map,
-					live.terrainOptions(),
+					live.worldTerrainOptions(),
 					biomeField,
 				),
 			);

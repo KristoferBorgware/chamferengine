@@ -498,6 +498,15 @@ export class TerrainGenerator {
 	 * found rather than asking the table again.
 	 */
 	private material(column: TerrainColumn, depthBelow: number): BlockType {
+		// **Nothing names this ground, so nothing paints it.** The bands below
+		// are a fallback, and a fallback that draws grass, beaches and snow
+		// lines is one nobody can tell from a world that was named -- so where
+		// the biome model is the only thing allowed to say what the surface is
+		// made of, a world without one is bare stone rather than a quieter
+		// version of the same picture. Every term that decides *where* the
+		// ground is has already run.
+		if (this.settings.bareRock) return BlockType.STONE;
+
 		const soil = this.settings.soilDepth * this.shape.blockSize;
 		if (depthBelow > soil) return BlockType.STONE;
 

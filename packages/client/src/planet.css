@@ -200,28 +200,6 @@ body {
 }
 /* Terrain against everything about how it is drawn -- the one split that
    matters among twenty-some groups in a single pane. */
-.knobs-tabs {
-	display: flex;
-	gap: 2px;
-	margin-top: 8px;
-	border-bottom: 1px solid var(--edge);
-}
-.knobs-tabs button {
-	flex: 1;
-	font: inherit;
-	font-size: 11px;
-	font-weight: 600;
-	padding: 7px 4px;
-	background: none;
-	border: none;
-	border-bottom: 2px solid transparent;
-	color: var(--dim);
-	cursor: pointer;
-}
-.knobs-tabs button.active {
-	color: #fff;
-	border-bottom-color: var(--live);
-}
 /* Every group is ruled off from the one above it, so a fold reads as a section
    of the panel rather than as a line of text in a list of rows. */
 .knobs section {
